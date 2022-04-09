@@ -1,6 +1,9 @@
 # My git ignore
 .idea
 tteesstt.py
+*homework.pdf
+httptest
+httptest.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
