@@ -1,13 +1,23 @@
 import argparse
 import logging
+import mimetypes
 import os
 import socket
+import urllib
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
+from enum import Enum
 
 DOCUMENT_ROOT = "./"
 TIME_OUT_SERVER = 10
 VALID_METHODS = ["GET", "HEAD"]
+
+class HTTPStatus(Enum):
+    OK = 200
+    FORBIDDEN = 403
+    NOT_FOUND = 404
+    METHOD_NOT_ALLOWED = 405
+    INTERNAL_SERVER_ERROR = 500
 
 
 class Server:
@@ -41,7 +51,7 @@ class ConnectHandler:
         self.server_name = server_name
         self.request = self.get_request(self.conn)
         logging.debug(f"Receive {self.request}")
-        self.response_status = "HTTP/1.1 200 OK"
+        self.response_status = None
         self.response_header = {
             'Date': datetime.now().strftime('%a, %d %b %Y %H:%M:%S GMT'),
             'Server': self.server_name,
@@ -57,8 +67,6 @@ class ConnectHandler:
         logging.debug("_________________________________________")
 
 
-
-
     def get_request(self, conn):
         logging.debug("Got request")
         request = b''
@@ -71,10 +79,15 @@ class ConnectHandler:
         return request.rstrip()
 
     def parse_request(self):
-        logging.debug("Parse request")
-        lines = self.request.decode().split("\r\n")
-        method, url, http_ver = lines[0].split(" ")
-        return method, url, http_ver
+        try:
+            logging.debug("Parse request")
+            lines = self.request.decode().split("\r\n")
+            method, url, http_ver = lines[0].split(" ")
+            url = urllib.parse.unquote(url, encoding='utf-8', errors='replace')
+            clear_url = urllib.parse.urlparse(url).path
+            return method, clear_url, http_ver
+        except Exception as error:
+            print(5555,error)
 
     def method_handler(self):
         if self.method in VALID_METHODS:
@@ -89,19 +102,40 @@ class ConnectHandler:
     def get_method(self):
         try:
             logging.debug("Get method")
-            path = self.get_path()
+            path = os.path.abspath(self.document_root + self.uri)
 
-            if path:
-                if not os.path.isfile(path):
+            if os.path.exists(path) and "../" not in self.uri:
 
+                print(f"path Exist {path}")
+                if os.path.isfile(path) and not self.uri.endswith("/"):
+                    with open(path) as data:
+                        self.response_data = data.read()
+                        self.response_status = HTTPStatus.OK
+                        self.response_header["Content-Type"] = self.define_content_type(path)
+
+                elif self.check_index_file(path):
+                    self.response_status = HTTPStatus.OK
+                    self.response_header["Content-Type"] = "text/html"
                     self.response_data = "<html>Directory index file</html>\n"
 
+                elif os.path.isfile(path) and self.uri.endswith("/"):
+                    print("MZZZZFK")
+                    self.response_status = HTTPStatus.NOT_FOUND
+
+                # else:
 
 
+            elif "../" in self.uri:
+                print(f"path FORBIDDEN {path}")
+                self.response_status = HTTPStatus.FORBIDDEN
+
+            else:
+                print(f"Path not found {path}")
+                self.response_status = HTTPStatus.NOT_FOUND
 
 
         except Exception as error:
-            print(error)
+            print(3333, error)
 
         response = self.create_response()
         logging.info("get method end")
@@ -111,14 +145,22 @@ class ConnectHandler:
     def head_method(self):
         pass
 
-    def get_path(self):
-        logging.debug("Get path")
-        path = os.path.abspath(self.document_root + self.uri)
-        if os.path.exists(path):
-            return path
+    def check_index_file(self, path):
+        if os.path.isdir(path):
+            list_files = os.listdir(path)
+            return 'index.html' in list_files
         else:
-            print("Path not exist")
-            return None
+            return False
+
+    def define_content_type(self, file_path: str) -> str:
+        """Метод по определению Content-Type передаваемого файла"""
+        _, file_extension = os.path.splitext(file_path)
+        return mimetypes.types_map[file_extension]
+
+    @staticmethod
+    def create_status_line(http_status: HTTPStatus):
+        print(http_status.name)
+        return f"HTTP/1.1 {http_status.value} {http_status.name}"
 
     def create_header(self):
         logging.debug("Create Header")
@@ -127,29 +169,28 @@ class ConnectHandler:
 
             if self.response_data:
                 self.response_header["Content-Length"] = len(self.response_data)
-                self.response_header["Content-Type"] = "text/html"
+                #self.response_header["Content-Type"] = "text/html"
 
             for key, value in self.response_header.items():
                 headers += f"{key}: {value}\r\n"
             return headers
         except Exception as error:
-            print(111,error)
+            print(111, error)
 
     def create_response(self):
         try:
             logging.debug("Create response")
+            status_line = self.create_status_line(self.response_status)
             headers = self.create_header()
-            response = self.response_status + "\r\n" + headers + "\r\n"
+            response = status_line + "\r\n" + headers + "\r\n"
 
             if self.response_data:
                 response += self.response_data + "\r\n"
-
 
             logging.debug(f"Response {response.encode()}")
             return response.encode()
         except Exception as error:
             print(222,error)
-
 
 
 if __name__ == "__main__":
