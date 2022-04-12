@@ -12,6 +12,7 @@ DOCUMENT_ROOT = "./"
 TIME_OUT_SERVER = 10
 VALID_METHODS = ["GET", "HEAD"]
 
+
 class HTTPStatus(Enum):
     OK = 200
     FORBIDDEN = 403
@@ -50,111 +51,82 @@ class ConnectHandler:
         self.document_root = document_root
         self.server_name = server_name
         self.request = self.get_request(self.conn)
-        logging.debug(f"Receive {self.request}")
+
         self.response_status = None
+        self.response_data = None
         self.response_header = {
             'Date': datetime.now().strftime('%a, %d %b %Y %H:%M:%S GMT'),
             'Server': self.server_name,
         }
-        self.response_data = None
 
         self.method, self.uri, self.http_ver = self.parse_request()
-        self.method_handler = self.method_handler()
-        #self.get_path()
+        self.method_handler()
 
-        self.response_code = 200
-
-        logging.debug("_________________________________________")
-
-    def get_request(self, conn):
-        logging.debug("Got request")
+    @staticmethod
+    def get_request(conn):
         request = b''
         while b"\r\n\r\n" not in request:
             chunk = conn.recv(1024)
             request += chunk
             if not chunk:
                 raise ConnectionError
-
         return request.rstrip()
 
     def parse_request(self):
-        try:
-            logging.debug("Parse request")
-            lines = self.request.decode().split("\r\n")
-            method, url, http_ver = lines[0].split(" ")
-            url = urllib.parse.unquote(url, encoding='utf-8', errors='replace')
-            clear_url = urllib.parse.urlparse(url).path
-            return method, clear_url, http_ver
-        except Exception as error:
-            print(5555,error)
+        lines = self.request.decode().split("\r\n")
+        method, url, http_ver = lines[0].split(" ")
+        url = urllib.parse.unquote(url, encoding='utf-8', errors='replace')
+        clear_url = urllib.parse.urlparse(url).path
+        return method, clear_url, http_ver
 
     def method_handler(self):
+        is_send_data = True
         if self.method in VALID_METHODS:
-            methods = {
-                "GET": self.get_method(),
-                "HEAD": self.head_method()
-            }
-            return methods[self.method]
+            self.request_method()
+            if self.method == "HEAD":
+                is_send_data = False
         else:
             self.response_status = HTTPStatus.METHOD_NOT_ALLOWED
-            response = self.create_response()
-            self.conn.sendall(response)
-            self.conn.close()
 
-    def get_method(self):
-        try:
-            logging.debug("Get method")
-            path = os.path.abspath(self.document_root + self.uri)
+        response = self.create_response(is_send_data)
+        self.send_response(response)
 
-            if os.path.exists(path) and "../" not in self.uri:
-
-                print(f"path Exist {path}")
-                if os.path.isfile(path) and not self.uri.endswith("/"):
-                    with open(path, 'rb') as data:
-                        self.response_data = data.read()
-                        self.response_status = HTTPStatus.OK
-                        self.response_header["Content-Type"] = self.define_content_type(path)
-
-                elif self.check_index_file(path):
+    def request_method(self):
+        path = os.path.abspath(self.document_root + self.uri)
+        if os.path.exists(path) and "../" not in self.uri:
+            if os.path.isfile(path) and not self.uri.endswith("/"):
+                with open(path, 'rb') as data:
+                    self.response_data = data.read()
                     self.response_status = HTTPStatus.OK
-                    self.response_header["Content-Type"] = "text/html"
-                    self.response_data = b"<html>Directory index file</html>\n"
+                    self.response_header["Content-Type"] = self.define_content_type(path)
 
-                elif os.path.isfile(path) and self.uri.endswith("/"):
-                    self.response_status = HTTPStatus.NOT_FOUND
+            elif self.check_index_file(path):
+                self.response_status = HTTPStatus.OK
+                self.response_header["Content-Type"] = "text/html"
+                self.response_data = b"<html>Directory index file</html>\n"
 
-                else:
-                    self.response_status = HTTPStatus.NOT_FOUND
-
-            # elif "../" in self.uri:
-            #     print(f"path FORBIDDEN {path}")
-            #     self.response_status = HTTPStatus.FORBIDDEN
-
-            else:
-                print(f"Path not found {path}")
+            elif os.path.isfile(path) and self.uri.endswith("/"):
                 self.response_status = HTTPStatus.NOT_FOUND
 
+            else:
+                self.response_status = HTTPStatus.NOT_FOUND
+        else:
+            self.response_status = HTTPStatus.NOT_FOUND
 
-        except Exception as error:
-            print(3333, error)
-
-        response = self.create_response()
-        logging.info("get method end")
+    def send_response(self, response):
         self.conn.sendall(response)
         self.conn.close()
 
-    def head_method(self):
-        self.get_method()
-        self.response_data = None
-
-    def check_index_file(self, path):
+    @staticmethod
+    def check_index_file(path):
         if os.path.isdir(path):
             list_files = os.listdir(path)
             return 'index.html' in list_files
         else:
             return False
 
-    def define_content_type(self, file_path: str) -> str:
+    @staticmethod
+    def define_content_type(file_path: str) -> str:
         _, file_extension = os.path.splitext(file_path)
         return mimetypes.types_map[file_extension]
 
@@ -163,33 +135,22 @@ class ConnectHandler:
         return f"HTTP/1.1 {http_status.value} {http_status.name}".encode()
 
     def create_header(self):
-        logging.debug("Create Header")
-        try:
-            headers = ""
+        headers = ""
+        if self.response_data:
+            self.response_header["Content-Length"] = len(self.response_data)
 
-            if self.response_data:
-                self.response_header["Content-Length"] = len(self.response_data)
+        for key, value in self.response_header.items():
+            headers += f"{key}: {value}\r\n"
+        return headers.encode()
 
-            for key, value in self.response_header.items():
-                headers += f"{key}: {value}\r\n"
-            return headers.encode()
-        except Exception as error:
-            print(111, error)
+    def create_response(self, is_send_data=True):
+        status_line = self.create_status_line(self.response_status)
+        headers = self.create_header()
+        response = status_line + b"\r\n" + headers + b"\r\n"
 
-    def create_response(self):
-        try:
-            logging.debug("Create response")
-            status_line = self.create_status_line(self.response_status)
-            headers = self.create_header()
-            response = status_line + b"\r\n" + headers + b"\r\n"
-
-            if self.response_data:
-                response += self.response_data + b"\r\n"
-
-            logging.debug(f"Response {response}")
-            return response
-        except Exception as error:
-            print(222, error)
+        if self.response_data and is_send_data:
+            response += self.response_data + b"\r\n"
+        return response
 
 
 if __name__ == "__main__":
