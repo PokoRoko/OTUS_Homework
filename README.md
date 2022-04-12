@@ -29,3 +29,53 @@
 2) http://localhost/httptest/wikipedia_russia.html корректно показывается в браузере
 3) Нагрузочное тестирование: запускаем ab -n 50000 -c 100 -r http://localhost:8080/ и смотрим результат
 4) Опционально: вместо ab воспользоваться wrk
+
+### Запуск проекта
+1) Установка зависимостей не требуется  
+2) Запуск `python3 my_log_analyzer.py`
+
+### Результаты нагрузочного тестирования
+```
+Server Software:        OTUServer
+Server Hostname:        localhost
+Server Port:            8080
+
+Document Path:          /
+Document Length:        0 bytes
+```
+
+Concurrency Level:      100
+Time taken for tests:   14.914 seconds
+Complete requests:      50000
+Failed requests:        0
+Non-2xx responses:      50000
+Total transferred:      4100000 bytes
+HTML transferred:       0 bytes
+Requests per second:    3352.49 [#/sec] (mean)
+Time per request:       29.829 [ms] (mean)
+Time per request:       0.298 [ms] (mean, across all concurrent requests)
+Transfer rate:          268.46 [Kbytes/sec] received
+
+#### Connection Times (ms)
+
+| d           | min |mean|[+/-sd]|median| max  | 
+|-------------|-----|----|-------|------|------| 
+| Connect:    | 0   | 0  | 13.6  | 0    | 1025 | 
+| Processing: | 2   | 30 | 4.7   | 28   | 234  | 
+| Waiting:    | 1   | 29 | 4.7   | 28   | 234  | 
+| Total:      | 7   | 30 | 14.9  | 28   | 1244 |
+
+
+#### Percentage of the requests served within a certain time (ms)
+
+| perc | ms   |
+|------|------|
+| 50%  | 28   |
+| 66%  | 30   |
+| 75%  | 31   |
+| 80%  | 32   |
+| 90%  | 35   |
+| 95%  | 39   |
+| 98%  | 43   |
+| 99%  | 45   |
+| 100% | 1244 |
