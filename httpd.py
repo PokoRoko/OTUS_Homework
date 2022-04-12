@@ -66,7 +66,6 @@ class ConnectHandler:
 
         logging.debug("_________________________________________")
 
-
     def get_request(self, conn):
         logging.debug("Got request")
         request = b''
@@ -97,7 +96,10 @@ class ConnectHandler:
             }
             return methods[self.method]
         else:
-            raise ConnectionError(f"Invalid method {self.method}")
+            self.response_status = HTTPStatus.METHOD_NOT_ALLOWED
+            response = self.create_response()
+            self.conn.sendall(response)
+            self.conn.close()
 
     def get_method(self):
         try:
@@ -108,7 +110,7 @@ class ConnectHandler:
 
                 print(f"path Exist {path}")
                 if os.path.isfile(path) and not self.uri.endswith("/"):
-                    with open(path) as data:
+                    with open(path, 'rb') as data:
                         self.response_data = data.read()
                         self.response_status = HTTPStatus.OK
                         self.response_header["Content-Type"] = self.define_content_type(path)
@@ -116,18 +118,17 @@ class ConnectHandler:
                 elif self.check_index_file(path):
                     self.response_status = HTTPStatus.OK
                     self.response_header["Content-Type"] = "text/html"
-                    self.response_data = "<html>Directory index file</html>\n"
+                    self.response_data = b"<html>Directory index file</html>\n"
 
                 elif os.path.isfile(path) and self.uri.endswith("/"):
-                    print("MZZZZFK")
                     self.response_status = HTTPStatus.NOT_FOUND
 
-                # else:
+                else:
+                    self.response_status = HTTPStatus.NOT_FOUND
 
-
-            elif "../" in self.uri:
-                print(f"path FORBIDDEN {path}")
-                self.response_status = HTTPStatus.FORBIDDEN
+            # elif "../" in self.uri:
+            #     print(f"path FORBIDDEN {path}")
+            #     self.response_status = HTTPStatus.FORBIDDEN
 
             else:
                 print(f"Path not found {path}")
@@ -143,7 +144,8 @@ class ConnectHandler:
         self.conn.close()
 
     def head_method(self):
-        pass
+        self.get_method()
+        self.response_data = None
 
     def check_index_file(self, path):
         if os.path.isdir(path):
@@ -153,14 +155,12 @@ class ConnectHandler:
             return False
 
     def define_content_type(self, file_path: str) -> str:
-        """Метод по определению Content-Type передаваемого файла"""
         _, file_extension = os.path.splitext(file_path)
         return mimetypes.types_map[file_extension]
 
     @staticmethod
     def create_status_line(http_status: HTTPStatus):
-        print(http_status.name)
-        return f"HTTP/1.1 {http_status.value} {http_status.name}"
+        return f"HTTP/1.1 {http_status.value} {http_status.name}".encode()
 
     def create_header(self):
         logging.debug("Create Header")
@@ -169,11 +169,10 @@ class ConnectHandler:
 
             if self.response_data:
                 self.response_header["Content-Length"] = len(self.response_data)
-                #self.response_header["Content-Type"] = "text/html"
 
             for key, value in self.response_header.items():
                 headers += f"{key}: {value}\r\n"
-            return headers
+            return headers.encode()
         except Exception as error:
             print(111, error)
 
@@ -182,15 +181,15 @@ class ConnectHandler:
             logging.debug("Create response")
             status_line = self.create_status_line(self.response_status)
             headers = self.create_header()
-            response = status_line + "\r\n" + headers + "\r\n"
+            response = status_line + b"\r\n" + headers + b"\r\n"
 
             if self.response_data:
-                response += self.response_data + "\r\n"
+                response += self.response_data + b"\r\n"
 
-            logging.debug(f"Response {response.encode()}")
-            return response.encode()
+            logging.debug(f"Response {response}")
+            return response
         except Exception as error:
-            print(222,error)
+            print(222, error)
 
 
 if __name__ == "__main__":
