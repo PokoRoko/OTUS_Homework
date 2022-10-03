@@ -9,6 +9,8 @@ python = "^3.9"
 python-dateutil = "^2.8.2"
 
 [tool.poetry.dev-dependencies]
+flake8 = "^5.0.4"
+isort = "^5.10.1"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

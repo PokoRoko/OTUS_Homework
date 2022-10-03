@@ -2,16 +2,18 @@
 # -*- coding: utf-8 -*-
 
 import abc
-import json
 import datetime
-import logging
 import hashlib
+import json
+import logging
 import uuid
-from optparse import OptionParser
+from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from typing import Any, Optional, Dict, Union, List, Tuple
+from optparse import OptionParser
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from dateutil.relativedelta import relativedelta
+from scoring import get_interests, get_score
 
 SALT = "Otus"
 ADMIN_LOGIN = "admin"
@@ -100,7 +102,7 @@ class ArgumentsField(BaseField):
 class EmailField(CharField):
     def _validate(self, value: str) -> None:
         super()._validate(value)
-        if "@" not in value:
+        if value and "@" not in value:
             raise ValueError(f"Email must include '@': {value}")
 
 
@@ -124,14 +126,15 @@ class DateField(BaseField):
     def _validate(self, value: str) -> None:
         super()._validate(value)
         if value is not None:
-            self.date = datetime.datetime.strptime(value, "%d.%m.%Y")
+            datetime.datetime.strptime(value, "%d.%m.%Y")
 
 
-class BirthDayField(DateField):
+class BirthDayField(BaseField):
     def _validate(self, value: str) -> None:
         super()._validate(value)
-        if self.date < datetime.datetime.now() - relativedelta(years=MAX_AGE):
-            raise ValueError(f"Invalid date of birth. Date cannot be more than {MAX_AGE} years ago")
+        if value and datetime.datetime.strptime(value, "%d.%m.%Y") < datetime.datetime.now() - relativedelta(
+                years=MAX_AGE):
+            raise ValueError(f"Invalid date of birth. Date cannot be more than {MAX_AGE} years or be empty")
 
 
 class GenderField(BaseField):
@@ -142,12 +145,10 @@ class GenderField(BaseField):
 
 
 class ClientIDsField(BaseField):
-    def __init__(self, required: bool, nullable: bool = False):
-
+    def __init__(self, required: bool, nullable: bool = False) -> None:
         super().__init__(required, nullable)
 
     def _validate(self, value: Optional[List[int]]) -> None:
-
         super()._validate(value)
         if not value or not isinstance(value, (list, tuple)):
             raise ValueError(f"Invalid format value: {value} {self.__class__.__name__} "
@@ -156,10 +157,6 @@ class ClientIDsField(BaseField):
         for id in value:
             if not isinstance(id, int):
                 raise ValueError(f"Invalid type ClientID {type(id)}. Expected type int")
-
-
-def method_handler(request, ctx, store):
-    pass
 
 
 class RequestMeta(type):
@@ -178,7 +175,7 @@ class BaseRequest(metaclass=RequestMeta):
     def __init__(self, request_body: Dict[str, Union[List[int], Optional[str]]]):
         self.request_body = request_body
 
-    def _validate_form(self) -> Dict[str, str]:
+    def _validate_field(self) -> Dict[str, str]:
         validation_errors = dict()
         for field_name, field_ in self.fields:
             try:
@@ -188,11 +185,10 @@ class BaseRequest(metaclass=RequestMeta):
                 validation_errors[field_name] = str(exc)
         return validation_errors
 
-    def is_valid(self) -> Tuple[bool, Optional[str]]:
-        validation_errors = self._validate_form()
+    def is_valid(self) -> tuple[bool, None] | tuple[bool, dict[str, str]]:
+        validation_errors = self._validate_field()
         if not validation_errors:
             return True, None
-
         return False, validation_errors
 
 
@@ -202,7 +198,6 @@ class ClientsInterestsRequest(BaseRequest):
 
 
 class OnlineScoreRequest(BaseRequest):
-
     first_name = CharField(required=False, nullable=True)
     last_name = CharField(required=False, nullable=True)
     email = EmailField(required=False, nullable=True)
@@ -210,26 +205,15 @@ class OnlineScoreRequest(BaseRequest):
     birthday = BirthDayField(required=False, nullable=True)
     gender = GenderField(required=False, nullable=True)
 
-    def is_valid(self) -> Tuple[bool, Optional[str]]:
-
-        """
-        Checks if request is valid.
-        Request is valid if every single field is valid
-        and at least one pair of fields (phone-mail, first_name-last_name, gender-birthday)
-        is not empty
-        :return: boolean if request is valid and error text if it is not valid
-        """
-
-        validation_errors = self._validate_form()
+    def is_valid(self) -> tuple[bool, None] | tuple[bool, str] | tuple[bool, dict[str, str]]:
+        validation_errors = self._validate_field()
         if not validation_errors:
-            if self.phone and self.email:
+            if self.phone and self.email or \
+                    self.first_name and self.last_name or \
+                    self.gender is not None and self.birthday:
                 return True, None
-            elif self.first_name and self.last_name:
-                return True, None
-            elif self.gender is not None and self.birthday:
-                return True, None
-            return False, "No required fields found together"
-
+            else:
+                return False, "No required fields together"
         return False, validation_errors
 
 
@@ -246,73 +230,147 @@ class MethodRequest(BaseRequest):
 
 
 def check_auth(request: MethodRequest):
-
     if request.is_admin:
         digest = hashlib.sha512(
-            (datetime.datetime.now().strftime("%Y%m%d%H") + ADMIN_SALT).encode("utf-8")
-        ).hexdigest()
+            (datetime.datetime.now().strftime("%Y%m%d%H") + ADMIN_SALT).encode("utf-8")).hexdigest()
     else:
-        digest = hashlib.sha512(
-            (request.account + request.login + SALT).encode("utf-8")
-        ).hexdigest()
+        digest = hashlib.sha512((request.account + request.login + SALT).encode("utf-8")).hexdigest()
     if digest == request.token:
         return True
-
     return False
 
-class MainHTTPHandler(BaseHTTPRequestHandler):
-    router = {
-        "method": method_handler
-    }
+
+def handle_interests_request(method_request: MethodRequest, store, context) -> tuple[Any, int] | tuple[dict, int]:
+    client_interests_request = ClientsInterestsRequest(request_body=method_request.arguments)
+    request_is_valid, errors = client_interests_request.is_valid()
+    if not request_is_valid:
+        return errors, HTTPStatus.UNPROCESSABLE_ENTITY
+
+    response = {client_id: get_interests(store=store, cid=client_id)
+                for client_id in client_interests_request.client_ids}
+
+    context["nclients"] = len(client_interests_request.client_ids)
+    return response, HTTPStatus.OK
+
+
+def handle_score_request(method_request: MethodRequest, store, context) -> Tuple[Dict, Any]:
+    online_score_request = OnlineScoreRequest(request_body=method_request.arguments)
+    request_is_valid, errors = online_score_request.is_valid()
+    if not request_is_valid:
+        return errors, HTTPStatus.UNPROCESSABLE_ENTITY
+
+    admin_score_response = 42
+    score = admin_score_response if method_request.is_admin else get_score(
+        store=store,
+        email=online_score_request.email,
+        birthday=online_score_request.birthday,
+        gender=online_score_request.gender,
+        first_name=online_score_request.first_name,
+        last_name=online_score_request.last_name,
+        phone=online_score_request.phone)
+
+    response = {"score": score}
+    context["has"] = [field_val[0] for field_val in online_score_request.fields
+                      if online_score_request.__dict__.get(field_val[0]) is not None]
+
+    return response, HTTPStatus.OK
+
+
+def handle_request_method(method_request: MethodRequest, store, context) -> Tuple[Union[Dict, str], Any]:
+    if method_request.method == "clients_interests":
+        return handle_interests_request(
+            method_request=method_request,
+            store=store,
+            context=context)
+    elif method_request.method == "online_score":
+        return handle_score_request(
+            method_request=method_request,
+            store=store,
+            context=context)
+    else:
+        return "Unknown method", HTTPStatus.UNPROCESSABLE_ENTITY
+
+
+def method_handler(request: Dict[str, Union[int, Any]], ctx, store):
+    method_request = MethodRequest(request_body=request["body"])
+
+    request_method_is_valid, request_method_errors = method_request.is_valid()
+    if not request_method_is_valid:
+        return request_method_errors, HTTPStatus.UNPROCESSABLE_ENTITY
+
+    if not check_auth(request=method_request):
+        return HTTPStatus.FORBIDDEN.phrase, HTTPStatus.FORBIDDEN
+
+    response, code = handle_request_method(
+        method_request=method_request,
+        context=ctx,
+        store=store
+    )
+    return response, code
+
+
+class HTTPHandler(BaseHTTPRequestHandler):
+    router = {"method": method_handler}
     store = None
 
-    def get_request_id(self, headers):
+    @staticmethod
+    def get_request_id(headers):
         return headers.get('HTTP_X_REQUEST_ID', uuid.uuid4().hex)
 
-    def do_POST(self):
-        response, code = {}, OK
-        context = {"request_id": self.get_request_id(self.headers)}
-        request = None
-        try:
-            data_string = self.rfile.read(int(self.headers['Content-Length']))
-            request = json.loads(data_string)
-        except:
-            code = BAD_REQUEST
-
-        if request:
-            path = self.path.strip("/")
-            logging.info("%s: %s %s" % (self.path, data_string, context["request_id"]))
-            if path in self.router:
-                try:
-                    response, code = self.router[path]({"body": request, "headers": self.headers}, context, self.store)
-                except Exception as e:
-                    logging.exception("Unexpected error: %s" % e)
-                    code = INTERNAL_ERROR
-            else:
-                code = NOT_FOUND
-
+    def send_response_POST(self, code, response, context):
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
         self.end_headers()
-        if code not in ERRORS:
-            r = {"response": response, "code": code}
+        if code is HTTPStatus.OK:
+            response = {"response": response, "code": code}
         else:
-            r = {"error": response or ERRORS.get(code, "Unknown Error"), "code": code}
-        context.update(r)
+            try:
+                error = HTTPStatus(code).phrase
+            except ValueError:
+                error = "Unknown Error"
+            response = {"error": error, "code": code}
+
+        context.update(response)
         logging.info(context)
-        self.wfile.write(json.dumps(r))
+        self.wfile.write(json.dumps(response))
         return
+
+    def do_POST(self):
+        response, code = dict(), HTTPStatus.OK
+        context = {"request_id": self.get_request_id(self.headers)}
+        request = None
+
+        try:
+            data_string = self.rfile.read(int(self.headers['Content-Length']))
+            request = json.loads(data_string)
+            if request:
+                path = self.path.strip("/")
+                logging.info(f'{self.path}, {data_string}, {context["request_id"]}')
+                if path in self.router:
+                    response, code = self.router[path]({"body": request, "headers": self.headers}, context, self.store)
+                else:
+                    code = HTTPStatus.NOT_FOUND
+        except Exception as error:
+            logging.exception("Unexpected error: %s" % error)
+            code = HTTPStatus.INTERNAL_SERVER_ERROR
+
+        self.send_response_POST(code, response, context)
 
 
 if __name__ == "__main__":
     op = OptionParser()
     op.add_option("-p", "--port", action="store", type=int, default=8080)
     op.add_option("-l", "--log", action="store", default=None)
-    (opts, args) = op.parse_args()
-    logging.basicConfig(filename=opts.log, level=logging.INFO,
-                        format='[%(asctime)s] %(levelname).1s %(message)s', datefmt='%Y.%m.%d %H:%M:%S')
-    server = HTTPServer(("localhost", opts.port), MainHTTPHandler)
-    logging.info("Starting server at %s" % opts.port)
+    opts, args = op.parse_args()
+    logging.basicConfig(
+        filename=opts.log,
+        level=logging.INFO,
+        format='[%(asctime)s] %(levelname).1s %(message)s',
+        datefmt='%Y.%m.%d %H:%M:%S')
+
+    server = HTTPServer(("localhost", opts.port), HTTPHandler)
+    logging.info(f"Starting server at {opts.port}")
+
     try:
         server.serve_forever()
     except KeyboardInterrupt:

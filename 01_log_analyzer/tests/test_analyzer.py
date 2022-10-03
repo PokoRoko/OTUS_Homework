@@ -99,6 +99,7 @@ class TestMyLogAnalyzer(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    from log_analyzer import check_exist_report, find_last_date_log, collect_report_data, log_parser, log_open, \
-        create_report
+    from log_analyzer import (check_exist_report, collect_report_data,
+                              create_report, find_last_date_log, log_open,
+                              log_parser)
     unittest.main()
