@@ -18,20 +18,6 @@ from scoring import get_interests, get_score
 SALT = "Otus"
 ADMIN_LOGIN = "admin"
 ADMIN_SALT = "42"
-OK = 200
-BAD_REQUEST = 400
-FORBIDDEN = 403
-NOT_FOUND = 404
-INVALID_REQUEST = 422
-INTERNAL_ERROR = 500
-
-ERRORS = {
-    BAD_REQUEST: "Bad Request",
-    FORBIDDEN: "Forbidden",
-    NOT_FOUND: "Not Found",
-    INVALID_REQUEST: "Invalid Request",
-    INTERNAL_ERROR: "Internal Server Error",
-}
 
 UNKNOWN = 0
 MALE = 1
@@ -49,10 +35,6 @@ MAX_AGE = 70
 
 
 class BaseField:
-    """
-    Base class fields
-    """
-
     def __init__(self, required: bool, nullable: bool) -> None:
         self.required = required
         self.nullable = nullable
@@ -205,7 +187,7 @@ class OnlineScoreRequest(BaseRequest):
     birthday = BirthDayField(required=False, nullable=True)
     gender = GenderField(required=False, nullable=True)
 
-    def is_valid(self) -> tuple[bool, None] | tuple[bool, str] | tuple[bool, dict[str, str]]:
+    def is_valid(self) -> tuple[bool, Any]:
         validation_errors = self._validate_field()
         if not validation_errors:
             if self.phone and self.email or \
