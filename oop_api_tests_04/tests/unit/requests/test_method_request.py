@@ -2,8 +2,7 @@ from http import HTTPStatus
 
 from oop_api_03 import api
 import pytest
-from tests.test_storage import KeyValueTestStorage
-from tests.utils import set_valid_auth
+from oop_api_tests_04.tests.utils import set_valid_auth, KeyValueTestStorage
 
 
 @pytest.fixture(scope="function", params=[

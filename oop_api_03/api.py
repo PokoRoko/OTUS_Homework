@@ -77,6 +77,10 @@ class CharField(BaseField):
 
 class ArgumentsField(BaseField):
     def _validate(self, value: Dict[str, Union[int, str]]) -> None:
+        import sys
+        print(sys.path)
+
+        print(1111111111, sys.path)
         super()._validate(value)
         try:
             if not isinstance(value, dict):
