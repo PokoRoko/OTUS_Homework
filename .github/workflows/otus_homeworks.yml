@@ -49,7 +49,9 @@ jobs:
     #----------------------------------------------
     - name: Install dependencies
       if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
-      run: poetry install --no-interaction --no-root
+      run: |
+        python -m pip install --upgrade pip
+        poetry install --no-interaction --no-root
     #----------------------------------------------
     # install your root project, if required
     #----------------------------------------------
@@ -58,10 +60,13 @@ jobs:
     #----------------------------------------------
     #          install and run linters
     #----------------------------------------------
-    - run: python -m pip install flake8 isort
-    - run: |
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        isort .
+    - name: flake8 Lint
+      uses: py-actions/flake8@v2
+      with:
+        ignore: "E501,F401,F403,F405,W50,E126,C901"
+        exclude: ".git,venv,static,tests,manage.py,tools,mock_data.py,tteesstt.py"
+        max-line-length: "120"
+        #path: "src"
     #----------------------------------------------
     # run tests
     #----------------------------------------------
