@@ -4,6 +4,7 @@ tteesstt.py
 *homework.pdf
 httptest
 httptest.py
+git add .gitignore.DS_Store
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

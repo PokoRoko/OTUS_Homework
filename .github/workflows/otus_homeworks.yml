@@ -64,7 +64,7 @@ jobs:
       uses: py-actions/flake8@v2
       with:
         ignore: "E501,F401,F403,F405,W50,E126,C901"
-        exclude: ".git,venv,static,tests,manage.py,tools,mock_data.py,tteesstt.py"
+        exclude: ".git,.venv,venv,static,tests,manage.py,tools,mock_data.py,tteesstt.py"
         max-line-length: "120"
         #path: "src"
     #----------------------------------------------
