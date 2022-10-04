@@ -1,7 +1,7 @@
 import datetime
 import hashlib
 import json
-from typing import Dict, Union, Optional, List
+from typing import Dict, List, Optional, Union
 
 from oop_api_03 import api
 

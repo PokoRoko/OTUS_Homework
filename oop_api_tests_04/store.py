@@ -1,6 +1,7 @@
 import logging
-from typing import Callable, NoReturn, Optional, Union
 from functools import wraps
+from typing import Callable, NoReturn, Optional, Union
+
 from redis.client import Redis
 from redis.exceptions import ConnectionError, TimeoutError
 

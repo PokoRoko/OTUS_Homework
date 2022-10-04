@@ -1,4 +1,5 @@
 import unittest
+
 from log_analyzer_01.log_analyzer import *
 
 
@@ -95,6 +96,8 @@ class TestMyLogAnalyzer(unittest.TestCase):
 
 if __name__ == '__main__':
     logger = logging.getLogger()
-    from log_analyzer_01.log_analyzer import check_exist_report, collect_report_data, log_parser, log_open, \
-        create_report
+    from log_analyzer_01.log_analyzer import (check_exist_report,
+                                              collect_report_data,
+                                              create_report, log_open,
+                                              log_parser)
     unittest.main()

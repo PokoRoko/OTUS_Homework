@@ -34,7 +34,6 @@ def get_score(store: KeyValueStorage,
         score += 0.5
     # cache expire 60 minutes
     store.cache_set(key, score, expire_time=60 * 60)
-
     return score
 
 
