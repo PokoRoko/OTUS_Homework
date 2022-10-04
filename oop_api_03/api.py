@@ -79,9 +79,11 @@ class ArgumentsField(BaseField):
     def _validate(self, value: Dict[str, Union[int, str]]) -> None:
         super()._validate(value)
         try:
+            if not isinstance(value, dict):
+                raise ValueError(f"{self.__class__.__name__} invalid value type, can be dict")
             json.dumps(value)
         except TypeError:
-            raise ValueError(f"{self.__class__.__name__} invalid value type, can be dict or json")
+            raise ValueError(f"{self.__class__.__name__} invalid json format")
 
 
 class EmailField(CharField):
@@ -117,9 +119,13 @@ class DateField(BaseField):
 class BirthDayField(BaseField):
     def _validate(self, value: str) -> None:
         super()._validate(value)
-        if value and datetime.datetime.strptime(value, "%d.%m.%Y") < datetime.datetime.now() - relativedelta(
-                years=MAX_AGE):
-            raise ValueError(f"Invalid date of birth. Date cannot be more than {MAX_AGE} years or be empty")
+        if value:
+            if not isinstance(value, str):
+                raise ValueError(f"Invalid type to date. Date cannot be {type(value)} or empty")
+            elif datetime.datetime.strptime(value, "%d.%m.%Y") < datetime.datetime.now() - relativedelta(years=MAX_AGE):
+                raise ValueError(f"Invalid date of birth. Date cannot be more than {MAX_AGE} years")
+            elif datetime.datetime.strptime(value, "%d.%m.%Y") > datetime.datetime.now():
+                raise ValueError(f"Invalid date of birth. Date cannot be in future {type(value)}")
 
 
 class GenderField(BaseField):
@@ -277,6 +283,7 @@ def handle_request_method(method_request: MethodRequest, store, context) -> Tupl
 
 
 def method_handler(request: Dict[str, Union[int, Any]], ctx, store):
+    print(request, ctx, store)
     method_request = MethodRequest(request_body=request["body"])
 
     request_method_is_valid, request_method_errors = method_request.is_valid()
@@ -291,6 +298,7 @@ def method_handler(request: Dict[str, Union[int, Any]], ctx, store):
         context=ctx,
         store=store
     )
+    print(response, code)
     return response, code
 
 

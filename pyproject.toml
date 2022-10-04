@@ -7,6 +7,8 @@ authors = ["ibukin <ibukin@voice-link.ru>"]
 [tool.poetry.dependencies]
 python = "^3.9"
 python-dateutil = "^2.8.2"
+pytest = "^7.1.3"
+redis = "^4.3.4"
 
 [tool.poetry.dev-dependencies]
 flake8 = "^5.0.4"
