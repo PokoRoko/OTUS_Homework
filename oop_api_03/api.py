@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import abc
 import datetime
 import hashlib
 import json
@@ -13,7 +12,11 @@ from optparse import OptionParser
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from dateutil.relativedelta import relativedelta
-from scoring import get_interests, get_score
+
+if __name__ == "oop_api_03.api":
+    from oop_api_tests_04.scoring import get_interests, get_score
+else:
+    from scoring import get_interests, get_score
 
 SALT = "Otus"
 ADMIN_LOGIN = "admin"
