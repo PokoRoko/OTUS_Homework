@@ -3,7 +3,7 @@ import random
 import pytest
 from redis.exceptions import ConnectionError
 
-from oop_api_tests_04.store import KeyValueStorage
+from .oop_api_tests_04.store import KeyValueStorage
 
 TEST_RETRIES = 3
 TEST_TIMEOUT = 3
