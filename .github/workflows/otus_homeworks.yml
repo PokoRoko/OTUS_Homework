@@ -68,6 +68,11 @@ jobs:
         max-line-length: "120"
         #path: "src"
     #----------------------------------------------
+    # print path
+    #----------------------------------------------
+    - name: Print python path
+      run: python -c "import os; print(__name__);print(os.getcwd());print(list(os.walk('.')))"
+    #----------------------------------------------
     # run tests
     #----------------------------------------------
     - name: Test with pytest
