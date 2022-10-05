@@ -71,4 +71,4 @@ jobs:
     # run tests
     #----------------------------------------------
     - name: Test with pytest
-      run: poetry run pytest --cov=<project-dir>
+      run: poetry run pytest --cov=/home/runner/work/OTUS_Homework
