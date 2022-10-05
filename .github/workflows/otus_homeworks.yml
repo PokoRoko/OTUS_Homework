@@ -51,7 +51,7 @@ jobs:
       if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
       run: |
         python -m pip install --upgrade pip
-        poetry install --no-interaction --no-root
+        poetry install --no-interaction
     #----------------------------------------------
     # install your root project, if required
     #----------------------------------------------
@@ -71,4 +71,4 @@ jobs:
     # run tests
     #----------------------------------------------
     - name: Test with pytest
-      run: poetry run pytest --rootdir=/home/runner/work/
+      run: poetry run pytest
